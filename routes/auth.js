@@ -52,11 +52,10 @@ router.post('/signup', async (req, res) => {
       });
     }
 
-    // Sign JWT for students
+    // Sign JWT for students (never expires)
     const token = jwt.sign(
       { id: newUser._id, role: newUser.role, approved: newUser.approved },
-      config.JWT_SECRET,
-      { expiresIn: '7d' }
+      config.JWT_SECRET
     );
 
     res.status(201).json({
@@ -104,11 +103,10 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ message: 'Your account is pending admin approval' });
     }
 
-    // Sign JWT
+    // Sign JWT (never expires)
     const token = jwt.sign(
       { id: user._id, role: user.role, approved: user.approved },
-      config.JWT_SECRET,
-      { expiresIn: '7d' }
+      config.JWT_SECRET
     );
 
     res.json({
