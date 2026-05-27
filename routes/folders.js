@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Folder, Document } = require('../db/models');
-const { auth, isStaff } = require('../middleware/auth');
+const { auth, isAdmin } = require('../middleware/auth');
 
 // @route   GET api/folders
 // @desc    Get all folders (requires auth)
@@ -29,8 +29,8 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   POST api/folders
-// @desc    Create a folder (Staff only)
-router.post('/', isStaff, async (req, res) => {
+// @desc    Create a folder (Admin only)
+router.post('/', isAdmin, async (req, res) => {
   const { name, type, parentId } = req.body;
 
   if (!name || !type) {
@@ -59,8 +59,8 @@ router.post('/', isStaff, async (req, res) => {
 });
 
 // @route   PUT api/folders/:id
-// @desc    Update/Rename a folder (Staff only)
-router.put('/:id', isStaff, async (req, res) => {
+// @desc    Update/Rename a folder (Admin only)
+router.put('/:id', isAdmin, async (req, res) => {
   const { name } = req.body;
 
   if (!name) {
@@ -91,8 +91,8 @@ router.put('/:id', isStaff, async (req, res) => {
 });
 
 // @route   DELETE api/folders/:id
-// @desc    Delete folder and cascade delete its contents (Staff only)
-router.delete('/:id', isStaff, async (req, res) => {
+// @desc    Delete folder and cascade delete its contents (Admin only)
+router.delete('/:id', isAdmin, async (req, res) => {
   const folderId = req.params.id;
 
   try {
