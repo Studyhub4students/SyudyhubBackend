@@ -177,7 +177,11 @@ router.post('/upload', isStaff, (req, res) => {
         fileUrl,
         filePublicId,
         fileName: req.file ? req.file.originalname : (directFileName || 'document.pdf'),
-        uploadedBy: (req.user.role === 'admin' || req.user.role === 'superadmin') ? 'Admin' : (req.user.name || 'Staff Member'),
+        uploadedBy: (req.user.role === 'admin' || req.user.role === 'superadmin')
+          ? 'Admin'
+          : (req.user.role === 'educator'
+            ? (req.user.name.toLowerCase().startsWith('teacher') ? `${req.user.name} (Educator)` : `Teacher ${req.user.name} (Educator)`)
+            : (req.user.name || 'Staff Member')),
         uploadedByUserId: req.user.id
       });
       
@@ -186,7 +190,11 @@ router.post('/upload', isStaff, (req, res) => {
       // Automatically create an announcement
       try {
         const displayType = type === 'notes' ? 'Notes' : (type === 'paper' ? 'PYQ/Paper' : (type === 'lab_manual' ? 'Lab Manual' : (type === 'book' ? 'Book' : 'Syllabus')));
-        const uploaderName = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 'Admin' : (req.user.name || 'Staff Member');
+        const uploaderName = (req.user.role === 'admin' || req.user.role === 'superadmin')
+          ? 'Admin'
+          : (req.user.role === 'educator'
+            ? (req.user.name.toLowerCase().startsWith('teacher') ? `${req.user.name} (Educator)` : `Teacher ${req.user.name} (Educator)`)
+            : (req.user.name || 'Staff Member'));
         const annTitle = `New ${displayType} Uploaded`;
         const annContent = `"${title}" has been uploaded by ${uploaderName}. Click here to open and view the document.`;
         
