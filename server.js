@@ -40,12 +40,14 @@ const authRoutes = require('./routes/auth');
 const folderRoutes = require('./routes/folders');
 const documentRoutes = require('./routes/documents');
 const announcementRoutes = require('./routes/announcements');
+const helpRoutes = require('./routes/help');
 
 // Mount API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/help', helpRoutes);
 
 // Seed default data using Mongoose
 async function seedDefaultData() {
