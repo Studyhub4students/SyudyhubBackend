@@ -233,7 +233,7 @@ router.post('/upload', isStaff, (req, res) => {
     } catch (uploadErr) {
       console.error('File storage/upload error:', uploadErr);
       deleteLocalFile(req.file.path);
-      res.status(500).json({ message: 'Failed to process and store file' });
+      res.status(500).json({ message: uploadErr.message || 'Failed to process and store file' });
     }
   });
 });
