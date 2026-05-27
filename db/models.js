@@ -131,14 +131,56 @@ const AnnouncementSchema = new Schema({
   }
 });
 
+// Help & Support Request Schema
+const HelpRequestSchema = new Schema({
+  userId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  name: {
+    type: String,
+    required: true
+  },
+  phone: {
+    type: String,
+    required: true
+  },
+  role: {
+    type: String,
+    required: true
+  },
+  subject: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  message: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'resolved'],
+    default: 'pending'
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
 const User = mongoose.model('User', UserSchema);
 const Folder = mongoose.model('Folder', FolderSchema);
 const Document = mongoose.model('Document', DocumentSchema);
 const Announcement = mongoose.model('Announcement', AnnouncementSchema);
+const HelpRequest = mongoose.model('HelpRequest', HelpRequestSchema);
 
 module.exports = {
   User,
   Folder,
   Document,
-  Announcement
+  Announcement,
+  HelpRequest
 };
