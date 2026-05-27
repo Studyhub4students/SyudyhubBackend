@@ -53,7 +53,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 30 * 1024 * 1024 } // 30 MB Max
+  limits: { fileSize: 50 * 1024 * 1024 } // 50 MB Max
 });
 
 // Configure Cloudinary if credentials exist
