@@ -188,6 +188,10 @@ const NotificationSchema = new Schema({
     type: String,
     required: true
   },
+  rawMessage: {
+    type: String,
+    default: ''
+  },
   read: {
     type: Boolean,
     default: false
