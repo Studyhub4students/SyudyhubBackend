@@ -20,12 +20,12 @@ router.post('/', isAdmin, async (req, res) => {
     }
 
     // Format the message as requested:
-    // From[ADMIN]
+    // Admin
     // msg body here
     //
     // Thank you,
     // Studyhub Team.
-    const formattedMessage = `From[ADMIN]\n${message.trim()}\n\nThank you,\nStudyhub Team.`;
+    const formattedMessage = `Admin\n${message.trim()}\n\nThank you,\nStudyhub Team.`;
 
     const newNotification = new Notification({
       recipientId,
