@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Notification, User } = require('../db/models');
+const { Notification, User, MessageTemplate } = require('../db/models');
 const { auth, isAdmin } = require('../middleware/auth');
 
 // @route   POST api/notifications
@@ -20,12 +20,12 @@ router.post('/', isAdmin, async (req, res) => {
     }
 
     // Format the message as requested:
-    // ADMIN
+    // From[ADMIN]
     // msg body here
     //
     // Thank you,
-    // Studyhub.
-    const formattedMessage = `ADMIN\n${message.trim()}\n\nThank you,\nTeam Studyhub.`;
+    // Studyhub Team.
+    const formattedMessage = `From[ADMIN]\n${message.trim()}\n\nThank you,\nStudyhub Team.`;
 
     const newNotification = new Notification({
       recipientId,
@@ -41,6 +41,76 @@ router.post('/', isAdmin, async (req, res) => {
   } catch (err) {
     console.error('Send notification error:', err);
     res.status(500).json({ message: 'Server error sending notification' });
+  }
+});
+
+// @route   GET api/notifications/templates
+// @desc    Get all message templates (Admin only)
+router.get('/templates', isAdmin, async (req, res) => {
+  try {
+    const templates = await MessageTemplate.find().sort({ createdAt: 1 });
+    res.json(templates.map(t => ({
+      id: t._id,
+      name: t.name,
+      content: t.content,
+      createdAt: t.createdAt
+    })));
+  } catch (err) {
+    console.error('Fetch templates error:', err);
+    res.status(500).json({ message: 'Server error loading templates' });
+  }
+});
+
+// @route   POST api/notifications/templates
+// @desc    Save a message template (Admin only)
+router.post('/templates', isAdmin, async (req, res) => {
+  const { name, content } = req.body;
+
+  if (!name || !content) {
+    return res.status(400).json({ message: 'Template name and content are required' });
+  }
+
+  try {
+    // Check if a template with the same name already exists
+    const existing = await MessageTemplate.findOne({ name: name.trim() });
+    if (existing) {
+      existing.content = content.trim();
+      await existing.save();
+      return res.status(200).json({
+        message: 'Template updated successfully',
+        templateId: existing._id
+      });
+    }
+
+    const newTemplate = new MessageTemplate({
+      name: name.trim(),
+      content: content.trim()
+    });
+
+    await newTemplate.save();
+
+    res.status(201).json({
+      message: 'Template saved successfully',
+      templateId: newTemplate._id
+    });
+  } catch (err) {
+    console.error('Save template error:', err);
+    res.status(500).json({ message: 'Server error saving template' });
+  }
+});
+
+// @route   DELETE api/notifications/templates/:id
+// @desc    Delete a message template (Admin only)
+router.delete('/templates/:id', isAdmin, async (req, res) => {
+  try {
+    const deleted = await MessageTemplate.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Template not found' });
+    }
+    res.json({ message: 'Template deleted successfully', id: req.params.id });
+  } catch (err) {
+    console.error('Delete template error:', err);
+    res.status(500).json({ message: 'Server error deleting template' });
   }
 });
 
