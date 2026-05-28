@@ -54,7 +54,7 @@ app.use('/api/notifications', notificationRoutes);
 // Seed default data using Mongoose
 async function seedDefaultData() {
   try {
-    const { User, Folder } = require('./db/models');
+    const { User, Folder, MessageTemplate } = require('./db/models');
 
     // 1. Seed Permanent Super Admin
     const superAdminPhone = '8218325600';
@@ -143,6 +143,23 @@ async function seedDefaultData() {
       ];
       await Folder.insertMany(defaultBooks.map(name => ({ name, type: 'books', parentId: null })));
       console.log('Seeded default Book folders');
+    }
+
+    // 4. Seed default message templates
+    const templatesCount = await MessageTemplate.countDocuments();
+    if (templatesCount === 0) {
+      const defaultTemplates = [
+        {
+          name: 'Welcome Educator',
+          content: 'Dear Sir/Ma’am,\n\nWe warmly welcome you to our platform as an educator and sincerely thank you for joining us. Your presence and experience will greatly benefit our student community.\n\nWe kindly request you to upload any resources you have, such as notes, previous year questions, or lab manuals, which can help students in their learning journey.\n\nIn case you face any issues while using the platform or otherwise, please feel free to use the Help & Support page—we are always here to assist you.\n\nThank you once again for being a valuable part of our initiative.'
+        },
+        {
+          name: 'Request Upload',
+          content: 'Dear Student/Educator,\n\nWe noticed that some resources (notes, PYQs, or lab manuals) for your department/year are currently missing. If you have access to these materials, we kindly request you to upload them to the portal to assist other learners.\n\nThank you for your cooperation!'
+        }
+      ];
+      await MessageTemplate.insertMany(defaultTemplates);
+      console.log('Seeded default message templates');
     }
 
   } catch (err) {
