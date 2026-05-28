@@ -200,11 +200,32 @@ const NotificationSchema = new Schema({
 
 const Notification = mongoose.model('Notification', NotificationSchema);
 
+// Message Template Schema
+const MessageTemplateSchema = new Schema({
+  name: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true
+  },
+  content: {
+    type: String,
+    required: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const MessageTemplate = mongoose.model('MessageTemplate', MessageTemplateSchema);
+
 module.exports = {
   User,
   Folder,
   Document,
   Announcement,
   HelpRequest,
-  Notification
+  Notification,
+  MessageTemplate
 };
