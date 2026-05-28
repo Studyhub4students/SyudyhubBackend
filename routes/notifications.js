@@ -29,7 +29,8 @@ router.post('/', isAdmin, async (req, res) => {
 
     const newNotification = new Notification({
       recipientId,
-      message: formattedMessage
+      message: formattedMessage,
+      rawMessage: message.trim()
     });
 
     await newNotification.save();
@@ -155,6 +156,86 @@ router.post('/read/:id', auth, async (req, res) => {
   } catch (err) {
     console.error('Mark notification read error:', err);
     res.status(500).json({ message: 'Server error updating notification status' });
+  }
+});
+
+// @route   GET api/notifications/all
+// @desc    Get all notifications (Superadmin only)
+router.get('/all', auth, async (req, res) => {
+  if (req.user.role !== 'superadmin') {
+    return res.status(403).json({ message: 'Access denied: Superadmins only' });
+  }
+  try {
+    const notifications = await Notification.find()
+      .populate('recipientId', 'name phone')
+      .sort({ createdAt: -1 });
+
+    res.json(notifications.map(n => ({
+      id: n._id,
+      recipient: n.recipientId ? {
+        name: n.recipientId.name,
+        phone: n.recipientId.phone
+      } : { name: 'Unknown User', phone: 'N/A' },
+      message: n.message,
+      rawMessage: n.rawMessage || '',
+      read: n.read,
+      createdAt: n.createdAt
+    })));
+  } catch (err) {
+    console.error('Fetch all notifications error:', err);
+    res.status(500).json({ message: 'Server error fetching notifications' });
+  }
+});
+
+// @route   PUT api/notifications/:id
+// @desc    Edit an unseen notification (Superadmin only)
+router.put('/:id', auth, async (req, res) => {
+  if (req.user.role !== 'superadmin') {
+    return res.status(403).json({ message: 'Access denied: Superadmins only' });
+  }
+  const { message: newRawMessage } = req.body;
+  if (!newRawMessage) {
+    return res.status(400).json({ message: 'Message body is required' });
+  }
+  try {
+    const notification = await Notification.findById(req.params.id);
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+    if (notification.read) {
+      return res.status(400).json({ message: 'Cannot edit a message that has already been seen' });
+    }
+
+    notification.rawMessage = newRawMessage.trim();
+    notification.message = `Admin\n${newRawMessage.trim()}\n\nThank you,\nStudyhub Team.`;
+    await notification.save();
+
+    res.json({
+      message: 'Notification updated successfully',
+      notificationId: notification._id,
+      formattedMessage: notification.message
+    });
+  } catch (err) {
+    console.error('Update notification error:', err);
+    res.status(500).json({ message: 'Server error updating notification' });
+  }
+});
+
+// @route   DELETE api/notifications/:id
+// @desc    Delete a notification (Superadmin only)
+router.delete('/:id', auth, async (req, res) => {
+  if (req.user.role !== 'superadmin') {
+    return res.status(403).json({ message: 'Access denied: Superadmins only' });
+  }
+  try {
+    const deleted = await Notification.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+    res.json({ message: 'Notification deleted successfully', id: req.params.id });
+  } catch (err) {
+    console.error('Delete notification error:', err);
+    res.status(500).json({ message: 'Server error deleting notification' });
   }
 });
 
