@@ -177,10 +177,34 @@ const Document = mongoose.model('Document', DocumentSchema);
 const Announcement = mongoose.model('Announcement', AnnouncementSchema);
 const HelpRequest = mongoose.model('HelpRequest', HelpRequestSchema);
 
+// Notification Schema
+const NotificationSchema = new Schema({
+  recipientId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  message: {
+    type: String,
+    required: true
+  },
+  read: {
+    type: Boolean,
+    default: false
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const Notification = mongoose.model('Notification', NotificationSchema);
+
 module.exports = {
   User,
   Folder,
   Document,
   Announcement,
-  HelpRequest
+  HelpRequest,
+  Notification
 };
