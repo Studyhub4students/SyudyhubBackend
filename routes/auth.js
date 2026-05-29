@@ -289,7 +289,7 @@ router.get('/teachers/ranking', auth, async (req, res) => {
         if (doc.likes) likesCount += doc.likes.length;
       });
 
-      const points = uploadsCount + likesCount;
+      const points = (uploadsCount * 2) + likesCount;
       rankingList.push({
         id: t._id,
         name: t.name,
