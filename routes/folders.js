@@ -1,7 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const { Folder, Document } = require('../db/models');
-const { auth, isAdmin } = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
+
+// Helper to recursively find all descendant folder IDs
+async function getDescendantFolderIds(folderId) {
+  let ids = [folderId];
+  const children = await Folder.find({ parentId: folderId });
+  for (const child of children) {
+    const subIds = await getDescendantFolderIds(child._id);
+    ids = ids.concat(subIds);
+  }
+  return ids;
+}
 
 // @route   GET api/folders
 // @desc    Get all folders (requires auth)
@@ -29,12 +40,23 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   POST api/folders
-// @desc    Create a folder (Admin only)
-router.post('/', isAdmin, async (req, res) => {
+// @desc    Create a folder (Admin/Teacher for roadmaps, Admin only for others)
+router.post('/', auth, async (req, res) => {
   const { name, type, parentId } = req.body;
 
   if (!name || !type) {
     return res.status(400).json({ message: 'Folder name and type are required' });
+  }
+
+  // Dynamic authorization check
+  if (type === 'roadmaps') {
+    if (req.user.role !== 'admin' && req.user.role !== 'superadmin' && req.user.role !== 'educator') {
+      return res.status(403).json({ message: 'Access denied: Teacher or Admin privileges required' });
+    }
+  } else {
+    if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+      return res.status(403).json({ message: 'Access denied: Admin privileges required' });
+    }
   }
 
   try {
@@ -59,8 +81,8 @@ router.post('/', isAdmin, async (req, res) => {
 });
 
 // @route   PUT api/folders/:id
-// @desc    Update/Rename a folder (Admin only)
-router.put('/:id', isAdmin, async (req, res) => {
+// @desc    Update/Rename a folder (Admin/Teacher for roadmaps, Admin only for others)
+router.put('/:id', auth, async (req, res) => {
   const { name } = req.body;
 
   if (!name) {
@@ -68,22 +90,31 @@ router.put('/:id', isAdmin, async (req, res) => {
   }
 
   try {
-    const updated = await Folder.findByIdAndUpdate(
-      req.params.id, 
-      { name }, 
-      { new: true }
-    );
-    
-    if (!updated) {
+    const folder = await Folder.findById(req.params.id);
+    if (!folder) {
       return res.status(404).json({ message: 'Folder not found' });
     }
 
+    // Dynamic authorization check
+    if (folder.type === 'roadmaps') {
+      if (req.user.role !== 'admin' && req.user.role !== 'superadmin' && req.user.role !== 'educator') {
+        return res.status(403).json({ message: 'Access denied: Teacher or Admin privileges required' });
+      }
+    } else {
+      if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+        return res.status(403).json({ message: 'Access denied: Admin privileges required' });
+      }
+    }
+
+    folder.name = name;
+    await folder.save();
+
     res.json({
-      id: updated._id,
-      name: updated.name,
-      type: updated.type,
-      parentId: updated.parentId,
-      createdAt: updated.createdAt
+      id: folder._id,
+      name: folder.name,
+      type: folder.type,
+      parentId: folder.parentId,
+      createdAt: folder.createdAt
     });
   } catch (err) {
     res.status(500).json({ message: 'Server error updating folder' });
@@ -91,8 +122,8 @@ router.put('/:id', isAdmin, async (req, res) => {
 });
 
 // @route   DELETE api/folders/:id
-// @desc    Delete folder and cascade delete its contents (Admin only)
-router.delete('/:id', isAdmin, async (req, res) => {
+// @desc    Delete folder and cascade delete its contents (Admin/Teacher for roadmaps, Admin only for others)
+router.delete('/:id', auth, async (req, res) => {
   const folderId = req.params.id;
 
   try {
@@ -101,14 +132,24 @@ router.delete('/:id', isAdmin, async (req, res) => {
       return res.status(404).json({ message: 'Folder not found' });
     }
 
-    // Find any subfolders
-    const subfolders = await Folder.find({ parentId: folderId });
-    const folderIdsToDelete = [folderId, ...subfolders.map(sf => sf._id)];
+    // Dynamic authorization check
+    if (folder.type === 'roadmaps') {
+      if (req.user.role !== 'admin' && req.user.role !== 'superadmin' && req.user.role !== 'educator') {
+        return res.status(403).json({ message: 'Access denied: Teacher or Admin privileges required' });
+      }
+    } else {
+      if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+        return res.status(403).json({ message: 'Access denied: Admin privileges required' });
+      }
+    }
+
+    // Recursively find all child subfolder IDs
+    const folderIdsToDelete = await getDescendantFolderIds(folderId);
 
     // Cascade delete all documents inside any of these folders
     await Document.deleteMany({ folderId: { $in: folderIdsToDelete } });
 
-    // Delete the subfolders and the main folder
+    // Delete the folders
     await Folder.deleteMany({ _id: { $in: folderIdsToDelete } });
 
     res.json({ message: 'Folder and all contents deleted successfully', folderId });
