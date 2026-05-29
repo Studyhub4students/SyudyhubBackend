@@ -45,7 +45,7 @@ const FolderSchema = new Schema({
   type: {
     type: String,
     required: true,
-    enum: ['notes', 'papers', 'lab_manuals', 'books']
+    enum: ['notes', 'papers', 'lab_manuals', 'books', 'roadmaps']
   },
   parentId: {
     type: Schema.Types.ObjectId,
@@ -68,7 +68,7 @@ const DocumentSchema = new Schema({
   type: {
     type: String,
     required: true,
-    enum: ['notes', 'paper', 'lab_manual', 'book', 'syllabus']
+    enum: ['notes', 'paper', 'lab_manual', 'book', 'syllabus', 'roadmap']
   },
   folderId: {
     type: Schema.Types.ObjectId,
@@ -104,6 +104,11 @@ const DocumentSchema = new Schema({
     ref: 'User',
     default: null
   },
+  likes: [{
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: []
+  }],
   createdAt: {
     type: Date,
     default: Date.now
