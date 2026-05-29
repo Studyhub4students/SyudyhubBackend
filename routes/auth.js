@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User } = require('../db/models');
+const { User, Document } = require('../db/models');
 const config = require('../config');
 const { auth, isAdmin, isSuperAdmin } = require('../middleware/auth');
 
@@ -271,6 +271,78 @@ router.post('/promote/:id', isSuperAdmin, async (req, res) => {
     res.json({ message: `Successfully promoted ${updated.name} to Super Admin`, userId: targetId });
   } catch (err) {
     res.status(500).json({ message: 'Server error promoting user' });
+  }
+});
+
+// @route   GET api/auth/teachers/ranking
+// @desc    Get all enrolled teachers with ranks and points (requires auth)
+router.get('/teachers/ranking', auth, async (req, res) => {
+  try {
+    const teachers = await User.find({ role: 'educator', approved: true }).select('name phone createdAt');
+    const rankingList = [];
+
+    for (const t of teachers) {
+      const uploadsCount = await Document.countDocuments({ uploadedByUserId: t._id });
+      const docs = await Document.find({ uploadedByUserId: t._id });
+      let likesCount = 0;
+      docs.forEach(doc => {
+        if (doc.likes) likesCount += doc.likes.length;
+      });
+
+      const points = uploadsCount + likesCount;
+      rankingList.push({
+        id: t._id,
+        name: t.name,
+        phone: t.phone,
+        uploads: uploadsCount,
+        likes: likesCount,
+        points,
+        createdAt: t.createdAt
+      });
+    }
+
+    // Sort by points descending, then by name
+    rankingList.sort((a, b) => {
+      if (b.points !== a.points) {
+        return b.points - a.points;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    res.json(rankingList);
+  } catch (err) {
+    console.error('Ranking endpoint error:', err);
+    res.status(500).json({ message: 'Server error loading rankings' });
+  }
+});
+
+// @route   GET api/auth/teachers/stats
+// @desc    Get teacher analytics statistics (requires auth)
+router.get('/teachers/stats', auth, async (req, res) => {
+  try {
+    // Total files uploaded by all educators
+    const educators = await User.find({ role: 'educator' }).select('_id');
+    const educatorIds = educators.map(e => e._id);
+    const totalTeacherFiles = await Document.countDocuments({ uploadedByUserId: { $in: educatorIds } });
+
+    // Files uploaded by self
+    const ownFilesCount = await Document.countDocuments({ uploadedByUserId: req.user.id });
+
+    // Total likes on self's resources
+    const ownDocs = await Document.find({ uploadedByUserId: req.user.id });
+    let ownLikesCount = 0;
+    ownDocs.forEach(doc => {
+      if (doc.likes) ownLikesCount += doc.likes.length;
+    });
+
+    res.json({
+      totalTeacherFiles,
+      ownFilesCount,
+      ownLikesCount
+    });
+  } catch (err) {
+    console.error('Stats endpoint error:', err);
+    res.status(500).json({ message: 'Server error loading teacher stats' });
   }
 });
 
