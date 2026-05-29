@@ -53,7 +53,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50 MB Max
+  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB Max
 });
 
 // Configure Cloudinary if credentials exist
@@ -95,20 +95,26 @@ router.get('/', auth, async (req, res) => {
   if (year) query.year = year;
 
   try {
-    const documents = await Document.find(query).sort({ createdAt: -1 });
-    res.json(documents.map(d => ({
-      id: d._id,
-      title: d.title,
-      type: d.type,
-      folderId: d.folderId,
-      subject: d.subject,
-      year: d.year,
-      fileUrl: getAbsoluteUrl(req, d.fileUrl),
-      fileName: d.fileName,
-      uploadedBy: d.uploadedBy,
-      uploadedByUserId: d.uploadedByUserId,
-      createdAt: d.createdAt
-    })));
+    const documents = await Document.find(query).populate('uploadedByUserId', 'role').sort({ createdAt: -1 });
+    res.json(documents.map(d => {
+      const isTeacher = d.uploadedByUserId && d.uploadedByUserId.role === 'educator';
+      return {
+        id: d._id,
+        title: d.title,
+        type: d.type,
+        folderId: d.folderId,
+        subject: d.subject,
+        year: d.year,
+        fileUrl: getAbsoluteUrl(req, d.fileUrl),
+        fileName: d.fileName,
+        uploadedBy: d.uploadedBy,
+        uploadedByUserId: d.uploadedByUserId ? d.uploadedByUserId._id : null,
+        isUploadedByTeacher: !!isTeacher,
+        likesCount: d.likes ? d.likes.length : 0,
+        hasLiked: d.likes ? d.likes.includes(req.user.id) : false,
+        createdAt: d.createdAt
+      };
+    }));
   } catch (err) {
     res.status(500).json({ message: 'Server error loading documents' });
   }
@@ -137,7 +143,7 @@ router.post('/upload', isStaff, (req, res) => {
     }
 
     // Validate type
-    if (!['notes', 'paper', 'lab_manual', 'book', 'syllabus'].includes(type)) {
+    if (!['notes', 'paper', 'lab_manual', 'book', 'syllabus', 'roadmap'].includes(type)) {
       if (req.file) deleteLocalFile(req.file.path);
       return res.status(400).json({ message: 'Invalid document type' });
     }
@@ -189,7 +195,7 @@ router.post('/upload', isStaff, (req, res) => {
 
       // Automatically create an announcement
       try {
-        const displayType = type === 'notes' ? 'Notes' : (type === 'paper' ? 'PYQ/Paper' : (type === 'lab_manual' ? 'Lab Manual' : (type === 'book' ? 'Book' : 'Syllabus')));
+        const displayType = type === 'notes' ? 'Notes' : (type === 'paper' ? 'PYQ/Paper' : (type === 'lab_manual' ? 'Lab Manual' : (type === 'book' ? 'Book' : (type === 'roadmap' ? 'Roadmap' : 'Syllabus'))));
         const uploaderName = (req.user.role === 'admin' || req.user.role === 'superadmin')
           ? 'Admin'
           : (req.user.role === 'educator'
@@ -242,20 +248,26 @@ router.post('/upload', isStaff, (req, res) => {
 // @desc    Get all documents uploaded by the authenticated user (Educator/Admin only)
 router.get('/my-uploads', isStaff, async (req, res) => {
   try {
-    const documents = await Document.find({ uploadedByUserId: req.user.id }).sort({ createdAt: -1 });
-    res.json(documents.map(d => ({
-      id: d._id,
-      title: d.title,
-      type: d.type,
-      folderId: d.folderId,
-      subject: d.subject,
-      year: d.year,
-      fileUrl: getAbsoluteUrl(req, d.fileUrl),
-      fileName: d.fileName,
-      uploadedBy: d.uploadedBy,
-      uploadedByUserId: d.uploadedByUserId,
-      createdAt: d.createdAt
-    })));
+    const documents = await Document.find({ uploadedByUserId: req.user.id }).populate('uploadedByUserId', 'role').sort({ createdAt: -1 });
+    res.json(documents.map(d => {
+      const isTeacher = d.uploadedByUserId && d.uploadedByUserId.role === 'educator';
+      return {
+        id: d._id,
+        title: d.title,
+        type: d.type,
+        folderId: d.folderId,
+        subject: d.subject,
+        year: d.year,
+        fileUrl: getAbsoluteUrl(req, d.fileUrl),
+        fileName: d.fileName,
+        uploadedBy: d.uploadedBy,
+        uploadedByUserId: d.uploadedByUserId ? d.uploadedByUserId._id : null,
+        isUploadedByTeacher: !!isTeacher,
+        likesCount: d.likes ? d.likes.length : 0,
+        hasLiked: d.likes ? d.likes.includes(req.user.id) : false,
+        createdAt: d.createdAt
+      };
+    }));
   } catch (err) {
     res.status(500).json({ message: 'Server error loading your documents' });
   }
@@ -373,6 +385,39 @@ router.delete('/:id', isStaff, async (req, res) => {
   } catch (err) {
     console.error('Delete document error:', err);
     res.status(500).json({ message: 'Server error deleting document' });
+  }
+});
+
+// @route   POST api/documents/:id/like
+// @desc    Toggle user like on a document (requires auth)
+router.post('/:id/like', auth, async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    if (!doc.likes) {
+      doc.likes = [];
+    }
+
+    const userId = req.user.id;
+    const index = doc.likes.indexOf(userId);
+    let liked = false;
+
+    if (index === -1) {
+      doc.likes.push(userId);
+      liked = true;
+    } else {
+      doc.likes.splice(index, 1);
+      liked = false;
+    }
+
+    await doc.save();
+    res.json({ liked, likesCount: doc.likes.length });
+  } catch (err) {
+    console.error('Like toggle error:', err);
+    res.status(500).json({ message: 'Server error toggling like' });
   }
 });
 
