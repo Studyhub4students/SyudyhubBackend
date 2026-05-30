@@ -213,7 +213,7 @@ router.get('/users', isAdmin, async (req, res) => {
         docs.forEach(doc => {
           if (doc.likes) likesCount += doc.likes.length;
         });
-        points = (uploadsCount * 2) + likesCount;
+        points = uploadsCount + (likesCount * 2);
       }
       result.push({
         id: u._id,
@@ -304,7 +304,7 @@ router.get('/teachers/ranking', auth, async (req, res) => {
         if (doc.likes) likesCount += doc.likes.length;
       });
 
-      const points = (uploadsCount * 2) + likesCount;
+      const points = uploadsCount + (likesCount * 2);
       rankingList.push({
         id: t._id,
         name: t.name,
