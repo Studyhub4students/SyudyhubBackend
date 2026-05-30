@@ -203,14 +203,29 @@ router.post('/reject/:id', isAdmin, async (req, res) => {
 router.get('/users', isAdmin, async (req, res) => {
   try {
     const users = await User.find().select('-password');
-    res.json(users.map(u => ({
-      id: u._id,
-      name: u.name,
-      phone: u.phone,
-      role: u.role,
-      approved: u.approved,
-      createdAt: u.createdAt
-    })));
+    const result = [];
+    for (const u of users) {
+      let points = undefined;
+      if (u.role === 'educator') {
+        const uploadsCount = await Document.countDocuments({ uploadedByUserId: u._id });
+        const docs = await Document.find({ uploadedByUserId: u._id });
+        let likesCount = 0;
+        docs.forEach(doc => {
+          if (doc.likes) likesCount += doc.likes.length;
+        });
+        points = (uploadsCount * 2) + likesCount;
+      }
+      result.push({
+        id: u._id,
+        name: u.name,
+        phone: u.phone,
+        role: u.role,
+        approved: u.approved,
+        points,
+        createdAt: u.createdAt
+      });
+    }
+    res.json(result);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
