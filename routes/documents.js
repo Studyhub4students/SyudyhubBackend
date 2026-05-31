@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const cloudinary = require('cloudinary').v2;
-const { Document, Announcement } = require('../db/models');
+const { Document, Announcement, Notification } = require('../db/models');
 const config = require('../config');
 const { auth, isStaff, isAdmin } = require('../middleware/auth');
 
@@ -85,7 +85,7 @@ function deleteLocalFile(filePath) {
 // @desc    Get documents, optional filters by type, folderId, subject, year (requires auth)
 router.get('/', auth, async (req, res) => {
   const { type, folderId, subject, year } = req.query;
-  const query = {};
+  const query = { status: { $ne: 'pending' } };
 
   if (type) query.type = type;
   if (folderId) {
@@ -418,6 +418,243 @@ router.post('/:id/like', auth, async (req, res) => {
   } catch (err) {
     console.error('Like toggle error:', err);
     res.status(500).json({ message: 'Server error toggling like' });
+  }
+});
+
+// @route   POST api/documents/contribute
+// @desc    Contribute a PDF note/paper/lab manual (any authenticated user)
+router.post('/contribute', auth, (req, res) => {
+  upload.single('pdf')(req, res, async function (err) {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ message: `Multer Error: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ message: err.message });
+    }
+
+    const { title, type, folderId, subject, year, fileUrl: directFileUrl, fileName: directFileName } = req.body;
+
+    if (!req.file && !directFileUrl) {
+      return res.status(400).json({ message: 'Please upload a PDF file or provide a file URL' });
+    }
+
+    if (!title || !type) {
+      if (req.file) deleteLocalFile(req.file.path);
+      return res.status(400).json({ message: 'Title and document type are required' });
+    }
+
+    // Validate type: notes, paper, lab_manual (not for books and roadmaps)
+    if (!['notes', 'paper', 'lab_manual'].includes(type)) {
+      if (req.file) deleteLocalFile(req.file.path);
+      return res.status(400).json({ message: 'Invalid document type for contribution. Only notes, papers, and lab manuals are allowed.' });
+    }
+
+    try {
+      let fileUrl = '';
+      let filePublicId = '';
+
+      if (directFileUrl) {
+        fileUrl = directFileUrl;
+        filePublicId = req.body.filePublicId || '';
+      } else if (isCloudinaryConfigured) {
+        // Upload to Cloudinary
+        const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+          folder: 'studyhub',
+          resource_type: 'raw',
+          access_mode: 'public'
+        });
+
+        fileUrl = uploadResult.secure_url;
+        filePublicId = uploadResult.public_id;
+        deleteLocalFile(req.file.path); // Delete local temp file
+      } else {
+        // Move temp file to public/uploads
+        const targetPath = path.join(UPLOADS_DIR, req.file.filename);
+        fs.renameSync(req.file.path, targetPath);
+        fileUrl = `/uploads/${req.file.filename}`;
+      }
+
+      // Save record to MongoDB as pending
+      const newDoc = new Document({
+        title,
+        type,
+        folderId: folderId && folderId !== 'null' ? folderId : null,
+        subject: subject || null,
+        year: year || null,
+        fileUrl,
+        filePublicId,
+        fileName: req.file ? req.file.originalname : (directFileName || 'document.pdf'),
+        uploadedBy: req.user.name || 'Student Contributor',
+        uploadedByUserId: req.user.id,
+        status: 'pending'
+      });
+      
+      await newDoc.save();
+
+      res.status(201).json({
+        message: 'Contribution uploaded successfully and is pending admin approval.',
+        id: newDoc._id,
+        title: newDoc.title,
+        status: newDoc.status
+      });
+    } catch (uploadErr) {
+      console.error('Contribution file storage/upload error:', uploadErr);
+      if (req.file) deleteLocalFile(req.file.path);
+      res.status(500).json({ message: uploadErr.message || 'Failed to process and store file' });
+    }
+  });
+});
+
+// @route   GET api/documents/pending
+// @desc    Get all pending contributions (Admin only)
+router.get('/pending', isAdmin, async (req, res) => {
+  try {
+    const documents = await Document.find({ status: 'pending' })
+      .populate('uploadedByUserId', 'name phone role')
+      .sort({ createdAt: -1 });
+
+    res.json(documents.map(d => ({
+      id: d._id,
+      title: d.title,
+      type: d.type,
+      folderId: d.folderId,
+      subject: d.subject,
+      year: d.year,
+      fileUrl: getAbsoluteUrl(req, d.fileUrl),
+      fileName: d.fileName,
+      uploadedBy: d.uploadedBy,
+      uploadedByUserId: d.uploadedByUserId ? d.uploadedByUserId._id : null,
+      contributorName: d.uploadedByUserId ? d.uploadedByUserId.name : d.uploadedBy,
+      contributorPhone: d.uploadedByUserId ? d.uploadedByUserId.phone : 'N/A',
+      createdAt: d.createdAt
+    })));
+  } catch (err) {
+    console.error('Fetch pending documents error:', err);
+    res.status(500).json({ message: 'Server error loading pending documents' });
+  }
+});
+
+// @route   POST api/documents/approve/:id
+// @desc    Approve a pending document (Admin only)
+router.post('/approve/:id', isAdmin, async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    if (doc.status !== 'pending') {
+      return res.status(400).json({ message: 'Document is not pending approval' });
+    }
+
+    doc.status = 'approved';
+    await doc.save();
+
+    // Create a Notification for the contributor
+    if (doc.uploadedByUserId) {
+      const successMessage = `dear User, \nyour File "${doc.title}" was accepted by the admins and it is listed ion the  Platform.\nthank you for your Contribution`;
+      
+      const newNotification = new Notification({
+        recipientId: doc.uploadedByUserId,
+        message: successMessage,
+        rawMessage: successMessage
+      });
+      await newNotification.save();
+    }
+
+    // Automatically create a public Announcement
+    try {
+      const displayType = doc.type === 'notes' ? 'Notes' : (doc.type === 'paper' ? 'PYQ/Paper' : (doc.type === 'lab_manual' ? 'Lab Manual' : (doc.type === 'book' ? 'Book' : (doc.type === 'roadmap' ? 'Roadmap' : 'Syllabus'))));
+      const annTitle = `New ${displayType} Uploaded`;
+      const annContent = `"${doc.title}" has been uploaded by ${doc.uploadedBy}. Click here to open and view the document.`;
+      
+      const announcement = new Announcement({
+        title: annTitle,
+        content: annContent,
+        docUrl: doc.fileUrl
+      });
+      await announcement.save();
+
+      // Limit announcements to 10 max
+      const count = await Announcement.countDocuments();
+      if (count > 10) {
+        const oldest = await Announcement.find().sort({ createdAt: 1 }).limit(count - 10);
+        const idsToDelete = oldest.map(a => a._id);
+        await Announcement.deleteMany({ _id: { $in: idsToDelete } });
+      }
+    } catch (annErr) {
+      console.error('Failed to create automatic announcement on approval:', annErr);
+    }
+
+    res.json({ message: 'Document approved successfully', docId: doc._id });
+  } catch (err) {
+    console.error('Approve document error:', err);
+    res.status(500).json({ message: 'Server error approving document' });
+  }
+});
+
+// @route   POST api/documents/reject/:id
+// @desc    Reject and delete a pending document (Admin only)
+router.post('/reject/:id', isAdmin, async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    // Delete file from Cloudinary/filesystem
+    if (isCloudinaryConfigured && doc.filePublicId) {
+      const resourceType = doc.fileUrl.includes('/raw/') ? 'raw' : 'image';
+      await cloudinary.uploader.destroy(doc.filePublicId, { resource_type: resourceType });
+    } else if (!isCloudinaryConfigured && doc.fileUrl.startsWith('/uploads/')) {
+      const fileName = path.basename(doc.fileUrl);
+      const filePath = path.join(UPLOADS_DIR, fileName);
+      deleteLocalFile(filePath);
+    }
+
+    // Create a Notification for the contributor BEFORE deleting the document record
+    if (doc.uploadedByUserId) {
+      const rejectMessage = `dear User,\nYour file "${doc.title}" was ejected By the admins.\nPlease check the file and retry.`;
+      
+      const newNotification = new Notification({
+        recipientId: doc.uploadedByUserId,
+        message: rejectMessage,
+        rawMessage: rejectMessage
+      });
+      await newNotification.save();
+    }
+
+    // Delete document record
+    await Document.findByIdAndDelete(req.params.id);
+
+    res.json({ message: 'Document rejected and deleted successfully', docId: req.params.id });
+  } catch (err) {
+    console.error('Reject document error:', err);
+    res.status(500).json({ message: 'Server error rejecting document' });
+  }
+});
+
+// @route   GET api/documents/my-contributions
+// @desc    Get all documents contributed by the authenticated user
+router.get('/my-contributions', auth, async (req, res) => {
+  try {
+    const documents = await Document.find({ uploadedByUserId: req.user.id }).sort({ createdAt: -1 });
+    res.json(documents.map(d => ({
+      id: d._id,
+      title: d.title,
+      type: d.type,
+      folderId: d.folderId,
+      subject: d.subject,
+      year: d.year,
+      fileUrl: getAbsoluteUrl(req, d.fileUrl),
+      fileName: d.fileName,
+      uploadedBy: d.uploadedBy,
+      uploadedByUserId: d.uploadedByUserId,
+      status: d.status || 'approved',
+      likesCount: d.likes ? d.likes.length : 0,
+      createdAt: d.createdAt
+    })));
+  } catch (err) {
+    res.status(500).json({ message: 'Server error loading your contributions' });
   }
 });
 
