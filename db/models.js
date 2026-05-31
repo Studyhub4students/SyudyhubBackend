@@ -109,6 +109,11 @@ const DocumentSchema = new Schema({
     ref: 'User',
     default: []
   }],
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'approved'
+  },
   createdAt: {
     type: Date,
     default: Date.now
