@@ -53,7 +53,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB Max
+  limits: { fileSize: 20 * 1024 * 1024 } // 10 MB Max
 });
 
 // Configure Cloudinary if credentials exist
@@ -110,6 +110,7 @@ router.get('/', auth, async (req, res) => {
         uploadedBy: d.uploadedBy,
         uploadedByUserId: d.uploadedByUserId ? d.uploadedByUserId._id : null,
         isUploadedByTeacher: !!isTeacher,
+        uploadedByRole: d.uploadedByUserId ? d.uploadedByUserId.role : null,
         likesCount: d.likes ? d.likes.length : 0,
         hasLiked: d.likes ? d.likes.includes(req.user.id) : false,
         createdAt: d.createdAt
@@ -234,6 +235,7 @@ router.post('/upload', isStaff, (req, res) => {
         fileName: newDoc.fileName,
         uploadedBy: newDoc.uploadedBy,
         uploadedByUserId: newDoc.uploadedByUserId,
+        uploadedByRole: req.user.role,
         createdAt: newDoc.createdAt
       });
     } catch (uploadErr) {
@@ -263,6 +265,7 @@ router.get('/my-uploads', isStaff, async (req, res) => {
         uploadedBy: d.uploadedBy,
         uploadedByUserId: d.uploadedByUserId ? d.uploadedByUserId._id : null,
         isUploadedByTeacher: !!isTeacher,
+        uploadedByRole: d.uploadedByUserId ? d.uploadedByUserId.role : null,
         likesCount: d.likes ? d.likes.length : 0,
         hasLiked: d.likes ? d.likes.includes(req.user.id) : false,
         createdAt: d.createdAt
