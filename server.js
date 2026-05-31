@@ -72,26 +72,7 @@ async function seedDefaultData() {
         approved: true
       });
       await newAdmin.save();
-      console.log('Seeded primary Super Admin account (Phone: 8218325600, Pass: ankit@2004)');
-    }
 
-    // 2. Seed Secondary Admin
-    const adminPhone = '9999999999';
-    const existingAdmin = await User.findOne({ phone: adminPhone });
-    
-    if (!existingAdmin) {
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash('adminpassword', salt);
-      
-      const newRegAdmin = new User({
-        name: 'Regular Admin',
-        phone: adminPhone,
-        password: hashedPassword,
-        role: 'admin',
-        approved: true
-      });
-      await newRegAdmin.save();
-      console.log('Seeded regular Admin account (Phone: 9999999999, Pass: adminpassword)');
     }
 
     // 3. Seed default subject folders if empty
