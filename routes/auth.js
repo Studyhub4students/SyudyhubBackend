@@ -400,4 +400,27 @@ router.post('/reset-password', auth, async (req, res) => {
   }
 });
 
+// @route   POST api/auth/users/:id/reset-password
+// @desc    Admin reset user password to "123456" (Admin only)
+router.post('/users/:id/reset-password', isAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Hash default password "123456"
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash('123456', salt);
+
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ message: `Successfully reset password for ${user.name} to 123456` });
+  } catch (err) {
+    console.error('Admin password reset error:', err);
+    res.status(500).json({ message: 'Server error resetting user password' });
+  }
+});
+
 module.exports = router;
