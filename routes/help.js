@@ -4,20 +4,55 @@ const { HelpRequest } = require('../db/models');
 const { auth, isAdmin } = require('../middleware/auth');
 
 // @route   POST api/help
-// @desc    Submit a help and support request (Teachers and Students)
-router.post('/', auth, async (req, res) => {
-  const { subject, message } = req.body;
+// @desc    Submit a help and support request (Teachers, Students, and Guests)
+router.post('/', async (req, res) => {
+  const { subject, message, name, phone, role } = req.body;
 
   if (!subject || !message) {
     return res.status(400).json({ message: 'Subject and message are required' });
   }
 
+  // Try to authenticate optional user token
+  let userId = null;
+  let submitterName = name;
+  let submitterPhone = phone;
+  let submitterRole = role;
+
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token) {
+    const jwt = require('jsonwebtoken');
+    const config = require('../config');
+    try {
+      const decoded = jwt.verify(token, config.JWT_SECRET);
+      userId = decoded.id;
+      // Get user from DB to ensure they exist
+      const { User } = require('../db/models');
+      const user = await User.findById(userId);
+      if (user) {
+        submitterName = user.name;
+        submitterPhone = user.phone;
+        submitterRole = user.role;
+      }
+    } catch (err) {
+      // Ignore token verification errors and treat as guest submission
+    }
+  }
+
+  // If guest (not authenticated), name, phone, and role are required
+  if (!userId) {
+    if (!submitterName || !submitterPhone || !submitterRole) {
+      return res.status(400).json({ message: 'Name, phone, and role are required' });
+    }
+  }
+
   try {
     const newRequest = new HelpRequest({
-      userId: req.user.id,
-      name: req.user.name,
-      phone: req.user.phone,
-      role: req.user.role,
+      userId: userId || null,
+      name: submitterName,
+      phone: submitterPhone,
+      role: submitterRole,
       subject,
       message
     });
