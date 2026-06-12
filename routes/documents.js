@@ -661,4 +661,65 @@ router.get('/my-contributions', auth, async (req, res) => {
   }
 });
 
+// @route   PUT api/documents/:id/move
+// @desc    Move/shift document to a different section and folder (Admin only)
+router.put('/:id/move', isAdmin, async (req, res) => {
+  const { targetType, targetFolderId } = req.body;
+
+  if (!targetType) {
+    return res.status(400).json({ message: 'Target section type is required' });
+  }
+
+  const validTypes = ['notes', 'paper', 'lab_manual', 'book', 'syllabus', 'roadmap'];
+  if (!validTypes.includes(targetType)) {
+    return res.status(400).json({ message: 'Invalid target section type' });
+  }
+
+  try {
+    const doc = await Document.findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    if (targetType === 'syllabus') {
+      doc.folderId = null;
+      doc.type = 'syllabus';
+    } else {
+      if (!targetFolderId) {
+        return res.status(400).json({ message: 'Target folder ID is required for this section' });
+      }
+      const { Folder } = require('../db/models');
+      const folder = await Folder.findById(targetFolderId);
+      if (!folder) {
+        return res.status(404).json({ message: 'Target folder not found' });
+      }
+
+      // Validate mapping folder type to document type
+      let mappedType = '';
+      if (folder.type === 'notes') mappedType = 'notes';
+      else if (folder.type === 'papers') mappedType = 'paper';
+      else if (folder.type === 'lab_manuals') mappedType = 'lab_manual';
+      else if (folder.type === 'books') mappedType = 'book';
+      else if (folder.type === 'roadmaps') mappedType = 'roadmap';
+      else {
+        return res.status(400).json({ message: 'Target folder type is invalid' });
+      }
+
+      // Ensure target folder type matches targetType
+      if (mappedType !== targetType) {
+        return res.status(400).json({ message: 'Target folder section type mismatch' });
+      }
+
+      doc.folderId = targetFolderId;
+      doc.type = targetType;
+    }
+
+    await doc.save();
+    res.json({ message: 'Document successfully moved', document: doc });
+  } catch (err) {
+    console.error('Move document error:', err);
+    res.status(500).json({ message: 'Server error moving document' });
+  }
+});
+
 module.exports = router;
