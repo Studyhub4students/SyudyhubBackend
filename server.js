@@ -42,6 +42,7 @@ const documentRoutes = require('./routes/documents');
 const announcementRoutes = require('./routes/announcements');
 const helpRoutes = require('./routes/help');
 const notificationRoutes = require('./routes/notifications');
+const sonicRoutes = require('./routes/sonic');
 
 // Mount API routes
 app.use('/api/auth', authRoutes);
@@ -50,6 +51,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/help', helpRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/sonic', sonicRoutes);
 
 // Seed default data using Mongoose
 async function seedDefaultData() {
