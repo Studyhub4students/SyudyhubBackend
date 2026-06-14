@@ -554,7 +554,7 @@ router.post('/approve/:id', isAdmin, async (req, res) => {
 
     // Create a Notification for the contributor
     if (doc.uploadedByUserId) {
-      const successMessage = `dear User, \nyour File "${doc.title}" was accepted by the admins and it is listed ion the  Platform.\nthank you for your Contribution`;
+      const successMessage = `Dear User, \nYour File "${doc.title}" was Accepted by the admins and it is listed on the Platform.\nthank you for your Contribution`;
       
       const newNotification = new Notification({
         recipientId: doc.uploadedByUserId,
@@ -616,7 +616,7 @@ router.post('/reject/:id', isAdmin, async (req, res) => {
 
     // Create a Notification for the contributor BEFORE deleting the document record
     if (doc.uploadedByUserId) {
-      const rejectMessage = `dear User,\nYour file "${doc.title}" was ejected By the admins.\nPlease check the file and retry.`;
+      const rejectMessage = `Dear User,\nYour file "${doc.title}" was Rejected by the admins.\nPlease check the file and retry.`;
       
       const newNotification = new Notification({
         recipientId: doc.uploadedByUserId,
