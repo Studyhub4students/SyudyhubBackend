@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User, Document } = require('../db/models');
+const { User, Document, Notification } = require('../db/models');
 const config = require('../config');
 const { auth, isAdmin, isSuperAdmin } = require('../middleware/auth');
 
@@ -44,6 +44,25 @@ router.post('/signup', async (req, res) => {
     });
     
     await newUser.save();
+
+    // Create welcome notification
+    let welcomeMsg = '';
+    if (role === 'student') {
+      welcomeMsg = `Welcome to StudyHub! 📚\nExplore notes, papers, and resources to boost your learning. Stay consistent and keep growing! 🚀\n\nThank you\nTeam Studyhub.`;
+    } else if (role === 'educator') {
+      welcomeMsg = `Dear Sir/Ma’am,\n\nWe warmly welcome you to our platform as an educator and sincerely thank you for joining us. Your presence and experience will greatly benefit our student community.\n\nWe kindly request you to upload any resources you have, such as notes, previous year questions, or lab manuals, which can help students in their learning journey.\n\nIn case you face any issues while using the platform or otherwise, please feel free to use the Help & Support page—we are always here to assist you.\n\nThank you once again for being a valuable part of our initiative.\n\nThank you\nTeam Studyhub`;
+    } else if (role === 'admin') {
+      welcomeMsg = `Welcome Admin! ⚙️\n\nYou have full control to manage content, users, and keep StudyHub running smoothly. Let’s build something impactful! 🚀\n\nThank you\nTeam Studyhub`;
+    }
+
+    if (welcomeMsg) {
+      const welcomeNotification = new Notification({
+        recipientId: newUser._id,
+        message: welcomeMsg,
+        rawMessage: welcomeMsg
+      });
+      await welcomeNotification.save();
+    }
 
     if (!approved) {
       return res.status(201).json({
@@ -192,6 +211,9 @@ router.post('/reject/:id', isAdmin, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
     
+    // Clean up notifications for rejected user
+    await Notification.deleteMany({ recipientId: userId });
+    
     res.json({ message: `Rejected and removed user account`, userId });
   } catch (err) {
     res.status(500).json({ message: 'Server error during rejection' });
@@ -260,6 +282,9 @@ router.delete('/users/:id', isAdmin, async (req, res) => {
     }
 
     await User.findByIdAndDelete(userId);
+    // Clean up notifications for deleted user
+    await Notification.deleteMany({ recipientId: userId });
+    
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
     console.error('Delete error:', err);
