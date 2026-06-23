@@ -76,6 +76,28 @@ router.post('/', async (req, res) => {
   }
 });
 
+// @route   GET api/help/my
+// @desc    Get all help and support requests submitted by the logged-in user
+router.get('/my', auth, async (req, res) => {
+  try {
+    const list = await HelpRequest.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    res.json(list.map(r => ({
+      id: r._id,
+      userId: r.userId,
+      name: r.name,
+      phone: r.phone,
+      role: r.role,
+      subject: r.subject,
+      message: r.message,
+      status: r.status,
+      createdAt: r.createdAt
+    })));
+  } catch (err) {
+    console.error('Load my help requests error:', err);
+    res.status(500).json({ message: 'Server error loading your help requests' });
+  }
+});
+
 // @route   GET api/help
 // @desc    Get all help and support requests (Admin and Superadmin only)
 router.get('/', isAdmin, async (req, res) => {
