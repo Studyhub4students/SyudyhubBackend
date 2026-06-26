@@ -144,7 +144,7 @@ router.post('/upload', isStaff, (req, res) => {
     }
 
     // Validate type
-    if (!['notes', 'paper', 'lab_manual', 'book', 'syllabus', 'roadmap'].includes(type)) {
+    if (!['notes', 'paper', 'lab_manual', 'book', 'syllabus', 'roadmap', 'competitive'].includes(type)) {
       if (req.file) deleteLocalFile(req.file.path);
       return res.status(400).json({ message: 'Invalid document type' });
     }
@@ -196,7 +196,7 @@ router.post('/upload', isStaff, (req, res) => {
 
       // Automatically create an announcement
       try {
-        const displayType = type === 'notes' ? 'Notes' : (type === 'paper' ? 'PYQ/Paper' : (type === 'lab_manual' ? 'Lab Manual' : (type === 'book' ? 'Book' : (type === 'roadmap' ? 'Roadmap' : 'Syllabus'))));
+        const displayType = type === 'notes' ? 'Notes' : (type === 'paper' ? 'PYQ/Paper' : (type === 'lab_manual' ? 'Lab Manual' : (type === 'book' ? 'Book' : (type === 'roadmap' ? 'Roadmap' : (type === 'competitive' ? 'Competitive Exam PYQ' : 'Syllabus')))));
         const uploaderName = (req.user.role === 'admin' || req.user.role === 'superadmin')
           ? 'Admin'
           : (req.user.role === 'educator'
@@ -566,7 +566,7 @@ router.post('/approve/:id', isAdmin, async (req, res) => {
 
     // Automatically create a public Announcement
     try {
-      const displayType = doc.type === 'notes' ? 'Notes' : (doc.type === 'paper' ? 'PYQ/Paper' : (doc.type === 'lab_manual' ? 'Lab Manual' : (doc.type === 'book' ? 'Book' : (doc.type === 'roadmap' ? 'Roadmap' : 'Syllabus'))));
+      const displayType = doc.type === 'notes' ? 'Notes' : (doc.type === 'paper' ? 'PYQ/Paper' : (doc.type === 'lab_manual' ? 'Lab Manual' : (doc.type === 'book' ? 'Book' : (doc.type === 'roadmap' ? 'Roadmap' : (doc.type === 'competitive' ? 'Competitive Exam PYQ' : 'Syllabus')))));
       const annTitle = `New ${displayType} Uploaded`;
       const annContent = `"${doc.title}" has been uploaded by ${doc.uploadedBy}. Click here to open and view the document.`;
       
@@ -670,7 +670,7 @@ router.put('/:id/move', isAdmin, async (req, res) => {
     return res.status(400).json({ message: 'Target section type is required' });
   }
 
-  const validTypes = ['notes', 'paper', 'lab_manual', 'book', 'syllabus', 'roadmap'];
+  const validTypes = ['notes', 'paper', 'lab_manual', 'book', 'syllabus', 'roadmap', 'competitive'];
   if (!validTypes.includes(targetType)) {
     return res.status(400).json({ message: 'Invalid target section type' });
   }
@@ -701,6 +701,7 @@ router.put('/:id/move', isAdmin, async (req, res) => {
       else if (folder.type === 'lab_manuals') mappedType = 'lab_manual';
       else if (folder.type === 'books') mappedType = 'book';
       else if (folder.type === 'roadmaps') mappedType = 'roadmap';
+      else if (folder.type === 'competitive') mappedType = 'competitive';
       else {
         return res.status(400).json({ message: 'Target folder type is invalid' });
       }
