@@ -32,6 +32,21 @@ const UserSchema = new Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  lastLogin: {
+    type: Date,
+    default: null
+  },
+  lastActive: {
+    type: Date,
+    default: null
+  },
+  deviceInfo: {
+    browser: { type: String, default: 'Unknown' },
+    os: { type: String, default: 'Unknown' },
+    deviceType: { type: String, default: 'Unknown' },
+    deviceModel: { type: String, default: 'Unknown' },
+    ip: { type: String, default: 'Unknown' }
   }
 });
 
@@ -113,6 +128,10 @@ const DocumentSchema = new Schema({
     type: String,
     enum: ['pending', 'approved', 'rejected'],
     default: 'approved'
+  },
+  isPinned: {
+    type: Boolean,
+    default: false
   },
   createdAt: {
     type: Date,
