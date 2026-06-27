@@ -96,7 +96,7 @@ router.get('/', auth, async (req, res) => {
 
   try {
     const documents = await Document.find(query).populate('uploadedByUserId', 'role').sort({ createdAt: -1 });
-    res.json(documents.map(d => {
+    const mapped = documents.map(d => {
       const isTeacher = d.uploadedByUserId && d.uploadedByUserId.role === 'educator';
       return {
         id: d._id,
@@ -113,9 +113,50 @@ router.get('/', auth, async (req, res) => {
         uploadedByRole: d.uploadedByUserId ? d.uploadedByUserId.role : null,
         likesCount: d.likes ? d.likes.length : 0,
         hasLiked: d.likes ? d.likes.includes(req.user.id) : false,
+        isPinned: d.isPinned || false,
         createdAt: d.createdAt
       };
-    }));
+    });
+
+    mapped.sort((a, b) => {
+      // 0. Sort by pinned descending (pinned documents go on top)
+      const pinA = a.isPinned ? 1 : 0;
+      const pinB = b.isPinned ? 1 : 0;
+      if (pinA !== pinB) {
+        return pinB - pinA; // Pinned (1) comes before unpinned (0)
+      }
+
+      const likesA = a.likesCount || 0;
+      const likesB = b.likesCount || 0;
+
+      // 1. Sort by likes descending if either has likes
+      if (likesA > 0 || likesB > 0) {
+        if (likesA !== likesB) {
+          return likesB - likesA; // Higher likes first
+        }
+      }
+
+      // 2. Sort by uploader role: Educator (Teacher) > Admin/Superadmin > Student
+      const rolePriority = (role) => {
+        if (role === 'educator') return 3;
+        if (role === 'admin' || role === 'superadmin') return 2;
+        return 1; // Student / other
+      };
+
+      const priorityA = rolePriority(a.uploadedByRole);
+      const priorityB = rolePriority(b.uploadedByRole);
+
+      if (priorityA !== priorityB) {
+        return priorityB - priorityA; // Higher priority role first
+      }
+
+      // 3. Sort by date descending (latest first)
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB - dateA;
+    });
+
+    res.json(mapped);
   } catch (err) {
     res.status(500).json({ message: 'Server error loading documents' });
   }
@@ -421,6 +462,25 @@ router.post('/:id/like', auth, async (req, res) => {
   } catch (err) {
     console.error('Like toggle error:', err);
     res.status(500).json({ message: 'Server error toggling like' });
+  }
+});
+
+// @route   POST api/documents/:id/pin
+// @desc    Toggle pin on a document (Admin/Teacher only)
+router.post('/:id/pin', isStaff, async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    doc.isPinned = !doc.isPinned;
+    await doc.save();
+
+    res.json({ message: doc.isPinned ? 'Document pinned successfully' : 'Document unpinned successfully', isPinned: doc.isPinned });
+  } catch (err) {
+    console.error('Pin toggle error:', err);
+    res.status(500).json({ message: 'Server error toggling pin' });
   }
 });
 
