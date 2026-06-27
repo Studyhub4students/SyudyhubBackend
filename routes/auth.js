@@ -6,6 +6,53 @@ const { User, Document, Notification } = require('../db/models');
 const config = require('../config');
 const { auth, isAdmin, isSuperAdmin } = require('../middleware/auth');
 
+function parseUserAgent(userAgent, ip = 'Unknown') {
+  let browser = 'Unknown';
+  let os = 'Unknown';
+  let deviceType = 'Desktop';
+  let deviceModel = 'Unknown';
+
+  if (!userAgent) {
+    return { browser, os, deviceType, deviceModel, ip };
+  }
+
+  // Detect OS
+  if (/windows/i.test(userAgent)) {
+    os = 'Windows';
+  } else if (/android/i.test(userAgent)) {
+    os = 'Android';
+    deviceType = 'Mobile';
+    // Try to extract Android device model
+    const match = userAgent.match(/Android\s+[^;]+;\s+([^;)]+)/);
+    if (match && match[1]) {
+      deviceModel = match[1].trim();
+    }
+  } else if (/ipad|iphone|ipod/i.test(userAgent)) {
+    os = 'iOS';
+    deviceType = /ipad/i.test(userAgent) ? 'Tablet' : 'Mobile';
+    deviceModel = /ipad/i.test(userAgent) ? 'iPad' : 'iPhone';
+  } else if (/macintosh|mac os x/i.test(userAgent)) {
+    os = 'macOS';
+  } else if (/linux/i.test(userAgent)) {
+    os = 'Linux';
+  }
+
+  // Detect Browser
+  if (/edg/i.test(userAgent)) {
+    browser = 'Edge';
+  } else if (/chrome|crios/i.test(userAgent)) {
+    browser = 'Chrome';
+  } else if (/firefox|fxios/i.test(userAgent)) {
+    browser = 'Firefox';
+  } else if (/safari/i.test(userAgent) && !/chrome|crios/i.test(userAgent)) {
+    browser = 'Safari';
+  } else if (/opr\//i.test(userAgent)) {
+    browser = 'Opera';
+  }
+
+  return { browser, os, deviceType, deviceModel, ip };
+}
+
 // @route   POST api/auth/signup
 // @desc    Register user (instant approval for student, admin approval for educator/admin)
 router.post('/signup', async (req, res) => {
@@ -128,6 +175,16 @@ router.post('/login', async (req, res) => {
       config.JWT_SECRET
     );
 
+    // Update login timestamps and device info
+    const userAgent = req.headers['user-agent'] || '';
+    const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'Unknown';
+    
+    user.lastLogin = new Date();
+    user.lastActive = new Date();
+    user.deviceInfo = parseUserAgent(userAgent, clientIp);
+    
+    await user.save();
+
     res.json({
       token,
       user: {
@@ -244,6 +301,9 @@ router.get('/users', isAdmin, async (req, res) => {
         role: u.role,
         approved: u.approved,
         points,
+        lastLogin: u.lastLogin,
+        lastActive: u.lastActive,
+        deviceInfo: u.deviceInfo || { browser: 'Unknown', os: 'Unknown', deviceType: 'Unknown', deviceModel: 'Unknown', ip: 'Unknown' },
         createdAt: u.createdAt
       });
     }
